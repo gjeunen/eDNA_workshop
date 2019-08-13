@@ -3,7 +3,7 @@ title: "Bioinformatics for eDNA metabarcoding"
 author: "Dr. Gert-Jan Jeunen"
 output: html_notebook
 ---
-test
+
 ***
 ## Introduction
 ***
@@ -45,7 +45,7 @@ Once the sequencing run is completed on the Illumina MiSeq, you will be given on
 
 One of the first things we want to do, is look at the quality of the raw sequencing file and make sure everything is fine. The program we will be using is __FastQC__ (website: https://www.bioinformatics.babraham.ac.uk/projects/fastqc/). This software has a graphical user interface (GUI) and will report on basic statistics, sequence quality, sequence length, ... It is also possible to use the command line, which will output a .html report with the same statistics. If your library was sequenced at Otago Genomics, a .html report will have been provided along with the sequencing files. An example figure of the report can be found below.
 
-![](Post_Doc_Work/screen_shot.png)
+![](screen_shot.png)
 
 From this report, you want to make sure that:  
   1. The _per base sequence quality_ stays within the green area (especially for Illumina MiSeq data).  
@@ -72,7 +72,7 @@ Today, we will be using __PEAR__ (Paired-End Read Merger: https://cme.h-its.org/
 
 An example of the output from the PEAR analysis can be found below.
 
-![](Post_Doc_Work/PEAR.png)
+![](PEAR.png)
 
 Another option to merge paired-end sequences is __ObiTools__ (website: https://git.metabarcoding.org/obitools/obitools/wikis/home). This software takes much longer to run, but successfully merges a larger proportion of reads. I have never looked into the downstream consequences (i.e., species detection) of the two different programs. For people working on BOROS, ObiTools is installed systemwide and does not need to be loaded in.
 
@@ -92,7 +92,7 @@ It is a good habit to occasionally check your sequencing files after you perform
 
 The reason I bring this up at this particular point is that the structure of the file has been modified drastically if you used ObiTools to merge the paired-end sequences.
 
-![](Post_Doc_Work/fastq_fasta.png) 
+![](fastq_fasta.png) 
 
 ***
 ## Demultiplexing
@@ -102,9 +102,9 @@ The reason I bring this up at this particular point is that the structure of the
 
 Now that the paired-end sequences are stitched together, we will assign each sequence to the corresponding sample, a process referred to as demultiplexing. 
 
-During library preparation, each sample was assigned a specific barcode combination, with at least 3 basepair differences between each barcode used in the library. By searching for these specific sequences, which are situated at the very beginning and very end of each sequence, we can assign each sequence to its sample. We will be using __ObiTools__ for demultiplexing our dataset today. ObiTools requires an additional text file with information about the barcode sequences and primer sequences in a single line per sample separated by tabs. The forward and reverse barcode (indicated in the file by "tags") are separated by ":". All forward and all reverse barcodes also need to be of the same length. So, if you used different length barcodes to increase complexity in the library, you will need to use multiple files per experiment OR add the remaining basepairs of the barcodes with longer lengths to the beginning of the forward or reverse primer. An example file can be found below.
+During library preparation, each sample was assigned a specific barcode combination, with at least 3 basepair differences between each barcode used in the library. By searching for these specific sequences, which are situated at the very beginning and very end of each sequence, we can assign each sequence to its sample. We will be using __ObiTools__ for demultiplexing our dataset today. ObiTools requires an additional text file with information about the barcode sequences and primer sequences in a single line per sample separated by tabs. The forward and reverse barcode (indicated in the text file by "tags") are separated by ":". All forward and all reverse barcodes also need to be of the same length. So, if different length barcodes were used to increase complexity in the library, you will need to use multiple files per experiment __OR__ add the remaining basepairs of the barcodes with longer lengths to the beginning of the forward or reverse primer. An example file can be found below.
 
-![](Post_Doc_Work/barcode.png) 
+![](barcode.png) 
 
 
 
