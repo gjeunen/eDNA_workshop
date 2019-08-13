@@ -1,0 +1,135 @@
+---
+title: "Bioinformatics for eDNA metabarcoding"
+author: "Dr. Gert-Jan Jeunen"
+output: html_notebook
+---
+
+***
+## Introduction
+***
+### _About this workshop_
+
+Welcome to the workshop _Bioinformatics for eDNA metabarcoding_!
+
+The purpose of the workshop is to give an introduction to the bioinformatics of eDNA metabarcoding and make you comfortable to explore your next-generation sequencing data. During this workshop, we'll go through the different steps of a bioinformatic pipeline to analyse eDNA metabarcoding NGS data, taking you from raw sequencing data all the way to an OTU table with taxonomic assignments ready for statistical analysis. You will learn how to assemble paired-end sequences, demultiplex the data, filter sequences based on quality, cluster and denoise the data, and assign taxonomy to OTUs. This accompanying document gives additional information about each step of the bioinformatic pipeline, plus sample code and output.
+
+Please do not distribute this document without written consent from the author.
+
+
+### _Introduction to eDNA metabarcoding library prep_
+
+I thought it would be a good idea to start with a brief introduction into how eDNA libraries are prepared in the lab and what sequencing strategies are typically chosen. This will give insight into how the sequences in an eDNA library are structured, which can be helpful to understand some of the choices made during the bioinformatic's part of your experiment.
+
+Currently, there are three main methods used to prepare eDNA metabarcoding libraries, each with their downsides and advantages.
+
+
+### _Software used during the workshop_
+
+
+
+### _How to use this document_
+
+
+
+
+***
+## Assembling paired reads
+***
+
+### _Introduction_
+
+Once the sequencing run is completed on the Illumina MiSeq, you will be given one or two files depending on the sequencing kit and sequencing options that were used. The file names appear to be random, but will always end in __R1_001.fastq.gz__ and __R2_001.fastq.gz__, for the forward and reverse sequencing file, respectively. If single-end sequencing was performed on your library, only the __R1_001.fastq.gz__ file will be provided. As you can see, these files are zipped ( __.gz__ ). However, there is no need to unzip them before analysis, since most software will be able to read and use zipped files.
+
+
+### _Quality control_
+
+One of the first things we want to do, is look at the quality of the raw sequencing file and make sure everything is fine. The program we will be using is __FastQC__ (website: https://www.bioinformatics.babraham.ac.uk/projects/fastqc/). This software has a graphical user interface (GUI) and will report on basic statistics, sequence quality, sequence length, ... It is also possible to use the command line, which will output a .html report with the same statistics. If your library was sequenced at Otago Genomics, a .html report will have been provided along with the sequencing files. An example figure of the report can be found below.
+
+![](Post_Doc_Work/screen_shot.png)
+
+From this report, you want to make sure that:  
+  1. The _per base sequence quality_ stays within the green area (especially for Illumina MiSeq data).  
+  2. The data does not contain _N_ bases.  
+  3. All sequences have _the same length_, equal to the cycle number of your kit.
+
+
+### _Merging paired-end sequences_
+
+This step is only needed if you have paired-end sequencing data!
+
+Once we made sure that the data we received from the sequencing service looks okay, we can start with merging the forward ( __R1_001.fastq.gz__ ) and reverse ( __R2_001.fastq.gz__ ) sequencing files. During this process, we will stitch together every forward and reverse sequence to obtain a sequence of similar length to the amplicon insert size. There are a myriad of software out that are able to merge paired-end sequences, e.g. COPE, FLASH, PANDAseq, QIIME, ... 
+
+Today, we will be using __PEAR__ (Paired-End Read Merger: https://cme.h-its.org/exelixis/web/software/pear/doc.html), which is an ultrafast and highly accurate pair-end read merger. When the amplicon size of your library is smaller than the cycle number of your sequencing kit, the forward and reverse sequences will partially overlap. This is highly recommended for eDNA metabarcoding and will allow you to only use the basic arguments within the PEAR software.
+
+> cd path/to/folder/  
+> screen  
+> module load pear/0.9.11  
+> pear -f forward_R1_001.fastq.gz -r reverse_R2_001.fastq.gz -o merged.fastq  
+
+  + -f: forward sequencing file
+  + -r: reverse sequencing file
+  + -o: output file
+
+An example of the output from the PEAR analysis can be found below.
+
+![](Post_Doc_Work/PEAR.png)
+
+Another option to merge paired-end sequences is __ObiTools__ (website: https://git.metabarcoding.org/obitools/obitools/wikis/home). This software takes much longer to run, but successfully merges a larger proportion of reads. I have never looked into the downstream consequences (i.e., species detection) of the two different programs. For people working on BOROS, ObiTools is installed systemwide and does not need to be loaded in.
+
+> illuminapairedend --score-min = 40 -r reverse_R2_001.fastq.gz forward_R1_001.fastq.gz > merged.fastq
+> obigrep -p 'mode!="joined"' merged.fastq > merged_joined.fastq
+
+  + illuminapairedend: utility that aligns the two reads and returns the reconstructed sequence
+  + --score-min: allows discarding sequences with low alignment quality
+  + -r: filename of the reverse reads (-f is not needed for the forward sequencing file)
+  + obigrep: removal of sequences that cannot be merged by illuminapairedend 
+  + -p: python expression that allows all sequences that do not have "mode=joined" as attribute to be kept
+
+
+### _Checking files with text editors_
+
+It is a good habit to occasionally check your sequencing files after you perform some commands to see how the software changed the structure of the file and if the code did what it was supposed to do. Fastq and Fasta files are text files structured in a particular way. Your sequencing files can be read by any text editor, such as TextWrangler. Vim or Nano are text editors that are available via the command line on BOROS. 
+
+The reason I bring this up at this particular point is that the structure of the file has been modified drastically if you used ObiTools to merge the paired-end sequences.
+
+![](Post_Doc_Work/fastq_fasta.png) 
+
+***
+## Demultiplexing
+***
+
+### _Introduction_
+
+Now that the paired-end sequences are stitched together, we will assign each sequence to the corresponding sample, a process referred to as demultiplexing. 
+
+During library preparation, each sample was assigned a specific barcode combination, with at least 3 basepair differences between each barcode used in the library. By searching for these specific sequences, which are situated at the very beginning and very end of each sequence, we can assign each sequence to its sample. We will be using __ObiTools__ for demultiplexing our dataset today. ObiTools requires an additional text file with information about the barcode sequences and primer sequences in a single line per sample separated by tabs. The forward and reverse barcode (indicated in the file by "tags") are separated by ":". All forward and all reverse barcodes also need to be of the same length. So, if you used different length barcodes to increase complexity in the library, you will need to use multiple files per experiment OR add the remaining basepairs of the barcodes with longer lengths to the beginning of the forward or reverse primer. An example file can be found below.
+
+![](Post_Doc_Work/barcode.png) 
+
+
+
+
+***
+## Quality filtering
+***
+
+### _Introduction_
+
+During the quality filtering step, we will discard all sequences that do not adhere to a set of rules
+
+
+
+***
+## Denoising or clustering
+***
+
+### _Introduction_
+
+
+***
+## Taxonomic assignment
+***
+
+### _Introduction_
+
+
