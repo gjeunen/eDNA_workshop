@@ -1,9 +1,15 @@
 ---
 title: "Bioinformatics for eDNA metabarcoding"
 author: "Dr. Gert-Jan Jeunen"
+date: 15^th^ of August, 2019
 output:
   html_document:
-    df_print: paged
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: false
+    theme: lumen 
 ---
 
 ***
@@ -13,16 +19,26 @@ output:
 
 Welcome to the workshop _Bioinformatics for eDNA metabarcoding_!
 
-The purpose of the workshop is to give an introduction on the bioinformatics of eDNA metabarcoding and make you comfortable to explore your next-generation sequencing data. During this workshop, we'll go through the different steps of a bioinformatic pipeline to analyse eDNA metabarcoding NGS data, taking you from raw sequencing data all the way to an OTU table with taxonomic assignments ready for statistical analysis. You will learn how to assemble paired-end sequences, demultiplex the data, filter sequences based on quality, cluster and denoise the data, and assign taxonomy to OTUs. This accompanying document gives additional information about each step of the bioinformatic pipeline, plus sample code and output.
+The purpose of the workshop is to give an introduction to the bioinformatics of eDNA metabarcoding and make you comfortable to explore your next-generation sequencing data. During this workshop, we'll go through the different steps of a bioinformatic pipeline, from raw sequencing data to an OTU table with taxonomic assignments. This will allow us to analyse and interpret metabarcoding data. You will learn how to assemble paired-end sequences, demultiplex the data, filter sequences based on quality, cluster and denoise the data, and assign taxonomy to OTUs. This accompanying document gives additional information about each step of the bioinformatic pipeline, plus sample code and output.
 
 Please do not distribute this document without written consent from the author.
 
 
-### _Introduction to eDNA metabarcoding library prep_
+### _Introduction to eDNA metabarcoding library prep and Illumina sequencing_
 
-I thought it would be a good idea to start with a brief introduction into how eDNA libraries are prepared in the lab and what sequencing strategies are typically chosen. This will give insight into how the sequences in an eDNA library are structured, which can be helpful to understand some of the choices made during the bioinformatic's part of your experiment.
+I thought it would be a good idea to start with a brief introduction to how eDNA libraries are prepared in the lab and what sequencing strategies are typically chosen. This will give insight into how the sequences in a sequencing file are structured, which can be helpful to understand some of the choices made during the bioinformatic's part of your experiment and important to know for trouble shooting.
 
-Currently, there are three main methods used to prepare eDNA metabarcoding libraries, each with their downsides and advantages, i.e., ligation, 2-step PCR, and 1-step PCR with fusion primers.
+Currently, there are three main methods used to prepare eDNA metabarcoding libraries, i.e., ligation, 2-step PCR, and 1-step PCR with fusion primers. While each of these methods have their advantages and downsides (e.g. ligation: low efficiency; 2-step PCR: high contamination risk; 1-step PCR: cost), the 1-step PCR protocol is the recommended method to prepare metabarcoding libraries. 
+
+Traditionally prepared Illumina libraries (ligation and 2-step PCR) will have a P5 adapter, followed by the DNA insert, and a P7 adapter, as can be seen on the figure below. Both adapters consist out of a DNA sequence that binds to the flowcell (bright red and dark blue fragments), an index (both green fragments), and a sequencing primer (orange and lightblue fragments). Sequencing of the fragment is demonstrated on the figure below (paired-end sequencing).
+
+![](traditional_illumina.png)
+
+When libraries are prepared with a 1-step PCR protocol, the libraries are structured slightly different. In these libraries, the P5 and P7 adapters are modified. They start with the same fragments that bind to the flowcell. However, they do not have an index between this fragment and the sequencing primer. Furthermore, the sequencing primer has been modified (i.e., shortened). Directly following the P5 and P7 adapters, we have an inline barcode (or index) of 6-8 basepairs long, which is then followed by the DNA insert. The DNA insert in our case is the primer sequence followed by the amplicon sequence.
+
+This means that the sequences we get back from the sequencing service all start with our forward barcodes which identify our samples, directly followed by the forward primer sequence we used to amplify our DNA fragment of interest, directly followed by the reverse complement of the reverse primer sequence and the reverse complement of our reverse barcode. This will be the end of each sequence when paired-end sequencing was performed. If single-end sequencing was performed, the sequence will end with the reverse complement of the P7 adapter. 
+
+This structure is important to know. If something goes wrong during the bioinformatic's part of your experiment, remember that sequencing files are plain text files structured in a specific way. These can be manipulated by most coding languages for trouble shooting. More on the structure of sequencing files and trouble shooting throughout this document. I, also, recommend learning one or several coding languages if you think bioinformatic's will be a big part of your research. The book Python for Biologists (website: https://pythonforbiologists.com) might be a good place to start!
 
 
 ### _Software used during the workshop_
@@ -31,9 +47,9 @@ Since the start of eDNA metabarcoding research, lab groups have been using sever
 
 Althoug software options are numerous, each pipeline follows the same basic steps, i.e., assembling paired reads, demultiplex the data, quality filtering, denoising or clustering, and taxonomic assignment. More information on each of these steps can be found in the corresponding chapters in this document. 
 
-Modifications to these steps can be made to optimise the pipeline for your specific data. Some software packages are equipped to handle all of these steps, such as QIIME (website: https://qiime2.org) or ObiTools (website: https://git.metabarcoding.org/obitools/obitools/wikis/home), while other software can only be used for a single step, such as cutadapt (website: https://cutadapt.readthedocs.io/en/stable/) and PEAR (website: https://cme.h-its.org/exelixis/web/software/pear/doc.html). It is easiest to use a single software package to run through the whole pipeline, since each program will make unique modifications to sequencing files that make it unable to be used by other software. However, being able to use different programs will allow for more freedom in your bioinformatic's pipeline, as the options available to you will increase. To be able to use multiple software packages in your pipeline, it is important to understand how a specific program changed the structure of the sequencing file and learn how these modifications can be reverted back. More information on the structure of sequencing files (Fastq and Fasta) and how specific software will change this structure can be found back under the header _Checking files with text editors_, in __Chapter 2: Assembling paired reads__.
+Modifications to or rearanging of these steps can be done to optimise the pipeline for your specific data. Some software packages are equipped to handle all of these steps, such as QIIME (website: https://qiime2.org) or ObiTools (website: https://git.metabarcoding.org/obitools/obitools/wikis/home), while other software can only be used for a single step, such as cutadapt (website: https://cutadapt.readthedocs.io/en/stable/) or PEAR (website: https://cme.h-its.org/exelixis/web/software/pear/doc.html). It is easiest to use a single software package to run through the whole pipeline, since each program will make unique modifications to sequencing files that make it unable to be used by other software. However, being able to use different programs and switch between programs within a pipeline will allow for more freedom, as the options available to you will increase. To be able to use multiple software packages in your pipeline, it is important to understand how a specific program changes the structure of the sequencing file and learn how these modifications can be reverted back. More information on the structure of sequencing files (Fastq and Fasta) and how specific software changes their structure can be found back under the header _Checking files with text editors_, in __Chapter 2: Assembling paired reads__.
 
-Today, we will be using multiple programs in our bioinformatic's pipeline, plus learn how to change the structure of sequencing files so they can be used by these programs:  
+Today, we will be using a pipeline published in several articles, which incorporates multiple programs in the pipeline. We will also learn how to change the structure of sequencing files so they can be used by these programs:  
 
   + *Quality control*: FastQC - https://www.bioinformatics.babraham.ac.uk/projects/fastqc/  
   + *Assembling paired reads*: PEAR - Paired-End Read Merger -  https://cme.h-its.org/exelixis/web/software/pear/doc.html  
@@ -45,13 +61,13 @@ Today, we will be using multiple programs in our bioinformatic's pipeline, plus 
 
 ### _How to use this document_
 
-This document was made to complement the eDNA metabarcoding workshop. It provides additional information about all the steps in the bioinformatic's pipeline, provides sample code, information about what the code does, and sample output. It would be a good idea to use this document as a guideline in future experiments. Better even would be to deviate from it, explore other options and optimise the analysis for your data when you feel comfortable with analysing eDNA metabarcoding data.
+This document was made to complement the eDNA metabarcoding workshop, but can also be used as a standalone guide to analysing metabarcoding data. It provides additional information about all the steps in the bioinformatic's pipeline, provides sample code, information about what each command does, and sample output. It would be a good idea to use this document as a guideline in future experiments. Better even would be to deviate from it, explore other options and optimise the analysis for your data when you feel comfortable with analysing metabarcoding data.
 
-Each chapter in this document is dedicated to a specific step in the pipeline we will follow during the workshop. The chapter will start by introducing the concept of what we want to achieve. Afterwards, sample code is given and will look like this:
+Each chapter in this document is dedicated to a specific step in the pipeline. The chapter will start by introducing the concept and what we want to achieve. Afterwards, sample code is given and will look like this:
 
 > example code
 
-This sample code will use generic file names and sometimes information on how to access the software specifically on BOROS. If you are using your own laptop, these steps will not be applicable to you. Sample code is followed by an explanation of every option of the code and a figure of the output file whenever possible.
+This sample code will use generic file names and sometimes information on how to access the software specifically on BOROS. If you are using your own laptop, these steps will not be applicable to you. Sample code is followed by an explanation of every option of the command and a figure of the output file whenever possible.
 
 During the workshop and in the future it might be a good idea to copy-paste the code into your terminal and change the filenames accordingly to reduce the risk of typo's. Typo's are, unfortunately, the __number 1__ reason you will see error messages!
 
@@ -64,7 +80,7 @@ During the workshop and in the future it might be a good idea to copy-paste the 
 
 ### _Introduction_
 
-Once the sequencing run is completed on the Illumina MiSeq, you will be given one or two files depending on the sequencing kit and sequencing options that were used. The file names appear to be random, but will always end in __R1_001.fastq.gz__ and __R2_001.fastq.gz__, for the forward and reverse sequencing file, respectively. If single-end sequencing was performed on your library, only the __R1_001.fastq.gz__ file will be provided. As you can see, these files are zipped ( __.gz__ ). However, there is no need to unzip them before analysis, since most software will be able to read and use zipped files.
+Once the sequencing run is completed on the Illumina MiSeq, you will be given one or two files depending on the sequencing kit and sequencing options that were chosen. The file names appear to be random, but will always end in __R1_001.fastq.gz__ and __R2_001.fastq.gz__, for the forward and reverse sequencing file, respectively. If single-end sequencing was performed on your library, only the __R1_001.fastq.gz__ file will be provided. As you can see, these files are zipped ( __.gz__ ). However, there is no need to unzip them before analysis, since most software will be able to read and use zipped files. However, always check if this is the case when using new software.
 
 
 ### _Quality control_
@@ -121,14 +137,14 @@ Another option to merge paired-end sequences is __ObiTools__ (website: https://g
 
 ### _Checking files with text editors_
 
-It is a good habit to occasionally check your sequencing files after you perform some commands to see how the software changed the structure of the file and if the code did what it was supposed to do. Both sequencing files (Fastq and Fasta) are text files structured in a specific way. Your sequencing files can be read by any text editor, such as TextWrangler. Vim or Nano are text editors that are available via the command line on BOROS. Another option would be to use the command _head_.
+It is a good habit to occasionally check your sequencing files after you perform some commands to see how the software changed the structure of the file and if the command did what it was supposed to do. Both sequencing files (Fastq and Fasta) are text files structured in a specific way. Your sequencing files can be read by any text editor, such as TextWrangler. Vim or Nano are text editors that are available via the command line on BOROS. Another option would be to use the command _head_.
 
 > head -10 merged.fastq
 
   + *head*: command to look at the top lines of a file
   + *-10*: number of lines to be displayed on the screen
 
-The reason I bring this up at this particular point is that the structure of the file has been modified drastically if you used ObiTools to merge the paired-end sequences. An example of the normal structure of Fastq and Fasta files can be found below. Underneath you can find an example of how ObiTools changed the structure of the Fastq file.
+The reason I bring this up at this particular point is that the structure of the file has been modified drastically if ObiTools was used to merge the paired-end sequences. An example of the normal structure of Fastq and Fasta files can be found below. Underneath you can find an example of how ObiTools changed the structure of the Fastq file.
 
 ![](fastq_fasta.png) 
 
@@ -157,7 +173,7 @@ During library preparation, each sample was assigned a specific barcode combinat
 After preparing the barcode information text files, make sure you place them in the same folder as the sequence file. 
 
 > cd path/to/text_file  
-> scp -r file name@boros:~/path/to/folder
+> scp -r file name@boros:~/path/to/sequencing_file_folder
 
 
 ### _Assigning sequences to corresponding samples_
@@ -198,14 +214,14 @@ Now that we have each sequence assigned to a sample, it is possible to count the
 
 Since the software we will be using to filter our dataset based on quality and other parameters (i.e., USEARCH) is not able to discard sequences longer than a specified length, we will do that at this stage with ObiTools.
 
-> obigrep -L 100 merged_assigned.fastq > merged_assigned_L100.fastq
+> obigrep -L 250 merged_assigned.fastq > merged_assigned_L250.fastq
 
   + *obigrep*: command similar to the Unix _grep_ command. It selects a subset of sequences from a file
   + *-L*: keeps sequences whose length is equal or shorter than the specified number
 
 Since we are ready now to filter our data based on quality and other parameters, we need to revert some changes made to the sequencing file by ObiTools. As mentioned before, ObiTools adds a lot of metadata to the sequence name. This metadata is necessary when going through the pipeline in ObiTools, but will need to be removed before we continue. Luckily ObiTools has put in a command to get rid of the metadata we do not need. We only need to keep one part of the metadata, namely the information of which sample each sequence belongs to.
 
-> obiannotate -k sample merged_assigned_L100.fastq
+> obiannotate -k sample merged_assigned_L250.fastq > merged_assigned_L250_annotated.fastq
 
   + *obiannotate*: allows adding/modifying/removing annotation attributes attached to sequence records (i.e., metadata)
   + *-k*: keeps only the specified attributes 
@@ -214,15 +230,17 @@ Since we are ready now to filter our data based on quality and other parameters,
 
 The free version of USEARCH, the software used for filtering our dataset, only allows for small files to be entered in the software. If your file sizes are too big, you will receive an error message that tells you to upgrade the software. While our files are generally much too big at this stage to be entered in USEARCH, there is a handy work-around by splitting the files per sample.
 
-> obisplit -t sample merged_assigned_L100.fastq
+> obisplit -t sample merged_assigned_L250_annotated.fastq
 
   + *obisplit*: splits the input sequence file in a set of subfiles according to the values of a given attribute
   + *-t*: attribute key used to split the sequence file
 
 At this stage, it would be good to make a new folder where we will put all the new sequence files in (i.e., the files split per sample) and move to that folder in the command line for the next step in our bioinformatic's pipeline.
 
+> ls -ltr  
 > mkdir QC  
-> scp -r sequence_file.fastq QC/  
+> scp -r 1-* QC/  
+> scp -r 2-* QC/  
 > cd QC/
 
 
@@ -246,7 +264,7 @@ For people on BOROS, we will first need to load the software into the system.
 
 We are now ready to call the command that will filter our sequences based on a set of parameters.
 
-> for fq in *.fastq; do usearch -fastq_filter $fq -fastq_maxee 1 -fastq_minlen 80 -fastq_maxns 0 -relabel $fq. -fastaout $fq.fasta -fastqout $fq.fastq; done
+> for fq in *.fastq; do usearch -fastq_filter $fq -fastq_maxee 1 -fastq_minlen 100 -fastq_maxns 0 -relabel $fq. -fastaout $fq.fasta -fastqout $fq.fastq; done
 
   + *for fq in*: starting loop and perform following command to all files ending in .fastq
   + *do*: perform the following command
@@ -264,6 +282,7 @@ We are now ready to call the command that will filter our sequences based on a s
 
 We will now combine all Fastq files together. This will allow us to have a look in FastQC and check the quality of the sequence file after filtering.
 
+> ls -ltr  
 > cat *.fastq.fastq > pooled.fastq
 
   + *cat*: concatenates or combines multiple files into one
@@ -296,7 +315,10 @@ During this step, we will also delete any unique sequences that are not prevalen
   + *-sizeout*: specifies that size annotations should be added to the output sequence labels
   + *-minuniquesize*: sets a minimum abundance
 
+![](uniquess.png)
+
 ![](uniques.png)
+
 
 
 ***
@@ -347,6 +369,19 @@ The output Fasta file from this command will be used as the input file for the t
 
 ![](zotutable.png)
 
+However, when we look at the output file, we see that there has been a mistake. All ZOTUs are assigned to a column "1" and a column "2", instead of our samples. So, what has happened? If we list the files in our folder we can see what has happened: all samples names are assigned as "1-*" or "2-" and USEARCH interpreted it as the end of the sample name. Before we repeat the code above, we will have to modify our sample names.
+
+> sed 's/-/_/g' pooled_upper.fasta > pooled_upper_changed.fasta
+
+![](sed.png)
+
+If we now rerun the code to generate an ZOTU table with the modified name, we retrieve the correct output. Always check the output and make sure the commands do what they are supposed to do before moving forward!
+
+> usearch -otutab pooled_upper_changed.fasta -zotus zotus_10.fasta -otutabout zotutab_10_changed.txt
+
+![](tab.png)
+
+
 Code for clustering the dataset:
 
 > usearch -cluster_otus uniques_sorted.fasta -otus otus.fasta -uparseout uparse.txt -relabel Otu  
@@ -392,7 +427,7 @@ Both the results downloaded from the website as the text file received from the 
 
 ![](megan.png)
 
-This will be all for this workshop. If there is a need to cover how to analyse BLAST data in detail and how to perform statistical analyses on these datasets in R, please let us know.
+We will leave it here for this workshop. If there is a need to provide a workshop on how to analyse BLAST data in detail and how to perform statistical analyses on these datasets in R, please let us know.
 
 #### __Thank you all for your attention!__
 
